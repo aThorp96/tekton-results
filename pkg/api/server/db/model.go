@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // Result is the database model of a Result.
@@ -52,6 +54,15 @@ type RecordSummary struct {
 
 func (r Result) String() string {
 	return fmt.Sprintf("(%s, %s)", r.Parent, r.ID)
+}
+
+type Label struct {
+	gorm.Model
+	key   string `gorm:"uniqueIndex:labels_by_key_value,priority:1;"`
+	value string `gorm:"uniqueIndex:labels_by_key_value,priority:2;"`
+}
+
+type HasLabel struct {
 }
 
 // Record is the database model of a Record
