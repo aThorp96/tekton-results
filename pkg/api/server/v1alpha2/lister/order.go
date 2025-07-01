@@ -43,8 +43,9 @@ var (
 	}
 
 	recordFieldsToColumns = map[string]string{
-		"create_time": "created_time",
-		"update_time": "updated_time",
+		"create_time":          "created_time",
+		"update_time":          "updated_time",
+		"data.metadata.labels": "record_labels",
 	}
 
 	orderByPattern = regexp.MustCompile(`^([\w\.]+)\s*(ASC|asc|DESC|desc)?$`)

@@ -56,13 +56,15 @@ func (r Result) String() string {
 	return fmt.Sprintf("(%s, %s)", r.Parent, r.ID)
 }
 
-type Label struct {
-	gorm.Model
-	key   string `gorm:"uniqueIndex:labels_by_key_value,priority:1;"`
-	value string `gorm:"uniqueIndex:labels_by_key_value,priority:2;"`
+type LabelKey struct {
+	Key string `gorm:"primaryKey;"`
 }
 
-type HasLabel struct {
+type Label struct {
+	gorm.Model
+	Key     LabelKey `gorm:"primaryKey;"`
+	Value   string   `gorm:"primaryKey;"`
+	Records []Record `gorm:"many2many:record_labels;"`
 }
 
 // Record is the database model of a Record
@@ -82,6 +84,9 @@ type Record struct {
 	// Version + Kind).
 	Type string `gorm:"size:768;"`
 	Data []byte `gorm:"type:jsonb;"`
+
+	// Only labels which are configured to be recorded will be included in this list
+	Labels []Label `gorm:"many2many:record_labels;"`
 
 	CreatedTime time.Time `gorm:"default:current_timestamp;"`
 	UpdatedTime time.Time `gorm:"default:current_timestamp;"`

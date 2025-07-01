@@ -107,7 +107,7 @@ func TestParseName(t *testing.T) {
 }
 
 func TestToStorage(t *testing.T) {
-	data := &ppb.TaskRun{Metadata: &ppb.ObjectMeta{Name: "tacocat"}}
+	data := &ppb.TaskRun{Metadata: &ppb.ObjectMeta{Name: "tacocat", Labels: map[string]string{"label1": "abc", "label2": "123"}}}
 
 	for _, tc := range []struct {
 		name string
@@ -183,7 +183,7 @@ func TestToStorage(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ToStorage("foo", "bar", "1", "baz", tc.in, &config.Config{})
+			got, err := ToStorage("foo", "bar", "1", "baz", tc.in, &config.Config{HIGH_TRAFFIC_LABELS: []string{"label1"}})
 			if err != nil {
 				t.Fatal(err)
 			}

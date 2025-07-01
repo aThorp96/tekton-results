@@ -46,5 +46,6 @@ func NewRecordsEnv() (*cel.Env, error) {
 		cel.Variable("name", cel.StringType),
 		cel.Variable("data_type", cel.StringType),
 		cel.Variable("data", cel.AnyType),
+		cel.Variable(`labels`, cel.MapType(cel.StringType, types.StringType)),
 	)
 }

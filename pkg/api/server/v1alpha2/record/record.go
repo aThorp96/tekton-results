@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/tektoncd/results/pkg/api/server/config"
 	"github.com/tektoncd/results/pkg/api/server/v1alpha2/log"
@@ -59,11 +60,20 @@ func FormatName(parent, name string) string {
 	return fmt.Sprintf("%s/records/%s", parent, name)
 }
 
+// hasLabels is an internal type just used to extract any labels from a record
+// when present.
+type hasLabels struct {
+	Metadata struct {
+		Labels map[string]string
+	}
+}
+
 // ToStorage converts an API Record into its corresponding database storage
 // equivalent.
 // parent,result,name should be the name parts (e.g. not containing "/results/" or "/records/").
 func ToStorage(parent, resultName, resultID, name string, r *pb.Record, config *config.Config) (*db.Record, error) {
-	if err := validateData(r.GetData()); err != nil {
+	parsedData, err := validateData(r.GetData())
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
@@ -105,7 +115,15 @@ func ToStorage(parent, resultName, resultID, name string, r *pb.Record, config *
 		}
 		dbr.Data = data
 	}
-
+	if config.HIGH_TRAFFIC_LABELS != nil && len(config.HIGH_TRAFFIC_LABELS) > 0 {
+		if hasLabels, ok := parsedData.(*hasLabels); ok {
+			for label, value := range hasLabels.Metadata.Labels {
+				if slices.Contains(config.HIGH_TRAFFIC_LABELS, label) {
+					dbr.Labels = append(dbr.Labels, db.Label{Key: db.LabelKey{Key: label}, Value: value})
+				}
+			}
+		}
+	}
 	return dbr, nil
 }
 
@@ -171,25 +189,38 @@ func UpdateEtag(r *db.Record) error {
 	return nil
 }
 
-func validateData(m *pb.Any) error {
+func validateData(m *pb.Any) (any, error) {
 	if err := ValidateType(m.GetType()); err != nil {
-		return err
+		return nil, err
 	}
 
 	if m == nil {
-		return nil
+		return nil, nil
 	}
+	var obj any
+	var err error
+
 	switch m.GetType() {
 	case "pipeline.tekton.dev/TaskRun":
-		return json.Unmarshal(m.GetValue(), &v1.TaskRun{})
+		obj = &v1.TaskRun{}
+		err = json.Unmarshal(m.GetValue(), obj.(*v1.TaskRun))
 	case "pipeline.tekton.dev/PipelineRun":
-		return json.Unmarshal(m.GetValue(), &v1.PipelineRun{})
+		obj = &v1.PipelineRun{}
+		err = json.Unmarshal(m.GetValue(), obj.(*v1.PipelineRun))
 	case "results.tekton.dev/v1alpha3.Log":
-		return json.Unmarshal(m.GetValue(), &v1alpha3.Log{})
+		obj = &v1alpha3.Log{}
+		err = json.Unmarshal(m.GetValue(), obj.(*v1alpha3.Log))
 	default:
 		// If it's not a well known type, just check that the message is a valid JSON document.
-		return json.Unmarshal(m.GetValue(), &json.RawMessage{})
+		obj = &hasLabels{}
+		hasLabelsErr := json.Unmarshal(m.GetValue(), obj.(*hasLabels))
+		if hasLabelsErr != nil {
+			// if the object doesn't have labels it's okay, we just try and get them if we can
+			obj = &json.RawMessage{}
+			err = json.Unmarshal(m.GetValue(), obj.(*json.RawMessage))
+		}
 	}
+	return obj, err
 }
 
 // ValidateType validates line t to ensure it can be stored in the database.

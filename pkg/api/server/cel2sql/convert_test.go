@@ -154,6 +154,11 @@ func TestConvertRecordExpressions(t *testing.T) {
 			in:   `data.metadata.annotations["foo"] == "bar" && !(data.metadata.name.endsWith("baz")) || (data.metadata.name.startsWith("foo") && data.metadata.name.contains("bar"))`,
 			want: `((((data->'metadata'->'annotations'->>'foo') = 'bar') AND NOT ((data->'metadata'->>'name') LIKE '%' || 'baz')) OR ((data->'metadata'->>'name') LIKE 'foo' || '%' AND POSITION('bar' IN (data->'metadata'->>'name')) <> 0))`,
 		},
+		{
+			name: "test overriding",
+			in:   `data.metadata.labels["test"] == "bar" `,
+			want: `((((data->'metadata'->'annotations'->>'test') = 'bar')`,
+		},
 	}
 
 	env, err := cel.NewRecordsEnv()

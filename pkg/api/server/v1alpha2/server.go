@@ -93,8 +93,11 @@ func New(config *config.Config, logger *zap.SugaredLogger, db *gorm.DB, opts ...
 	}
 
 	if config.DB_ENABLE_AUTO_MIGRATION {
-		if err := db.AutoMigrate(&model.Result{}, &model.Record{}); err != nil {
+		if err := db.AutoMigrate(&model.Result{}, &model.Record{}, &model.LabelKey{}, &model.Label{}); err != nil {
 			return nil, fmt.Errorf("error automigrating DB: %w", err)
+		}
+		if err := model.PostAutoMigrate(db, config); err != nil {
+			return nil, fmt.Errorf("error during postmigrations: %w", err)
 		}
 	}
 
