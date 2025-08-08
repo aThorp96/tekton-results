@@ -16,11 +16,15 @@
 package db
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Result is the database model of a Result.
@@ -76,6 +80,49 @@ type Record struct {
 	UpdatedTime time.Time `gorm:"default:current_timestamp;"`
 
 	Etag string `gorm:"size:128;"`
+}
+
+func (_ *Record) IndexMigrations(db *sql.DB, labels []string) error {
+	indexNamePrefix := "records_by_parent_created_time_labels"
+	labelHash := "TODO: hash the list of labels"
+	indexName := fmt.Sprintf("%s_%s", indexNamePrefix, labelHash)
+
+	// 1. Determine if any stale indexes exist using a naming pattern match
+	currentIndexes, err := db.Query("SELECT idx.indexname FROM pg_indexes idx WHERE idx.tablename = 'records' AND idx.indexname LIKE '%s_%' AND idx.indexname != '%s'", indexNamePrefix, indexName)
+	if err != nil {
+		return err
+	}
+	deleteStaleIndexesSql := []string{}
+	for currentIndexes.Next() {
+		var index string
+		if err := currentIndexes.Scan(&index); err != nil {
+			return err
+		}
+		deleteStaleIndexesSql = append(deleteStaleIndexesSql, fmt.Sprintf("DROP INDEX CONCURRENTLY %s;", index))
+	}
+
+	for _, statement := range deleteStaleIndexesSql {
+		if _, err := db.Exec(statement); err != nil {
+			return err
+		}
+	}
+
+	// parent, creationTimestamp, and created_time are always included
+	sqlColumnTemplates := []string{"parent", "data->'metadata'->'creationTimestamp'::text", "created_time DESC"}
+	sqlArgs := make([]interface{}, len(labels))
+
+	for i, label := range labels {
+		sqlColumnTemplates = append(sqlColumnTemplates, ", data->'metadata'->'labels'->>'%s'::text")
+		sqlArgs[i] = label
+	}
+
+	createIndexSql := fmt.Sprintf("CREATE INDEX CONCURRENTLY IF NOT EXISTS %s ON records (%s);", indexName, strings.Join(sqlColumnTemplates, ","))
+
+	if _, err := db.Exec(createIndexSql, sqlArgs...); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Annotations is a custom-defined type of a gorm model field.

@@ -96,6 +96,17 @@ func New(config *config.Config, logger *zap.SugaredLogger, db *gorm.DB, opts ...
 		if err := db.AutoMigrate(&model.Result{}, &model.Record{}); err != nil {
 			return nil, fmt.Errorf("error automigrating DB: %w", err)
 		}
+		dbConn, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("error getting generic DB connection: %w", err)
+		}
+		tx, err := dbConn.BeginTx(context.Background(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("error beginning migration transaction: %w", err)
+		}
+		tx.Exec(, args ...any) 
+		tx.Commit()
+
 	}
 
 	pluginServer, err := plugin.NewLogServer(srv.config, srv.logger, srv.auth, srv.db)
